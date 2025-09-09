@@ -23,12 +23,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-
-
-
 #============================== EDA for new data ==============================
 
-data = pd.read_excel("Spotify_data.xlsx")
+data = pd.read_excel("data/Spotify_data.xlsx")
 # 520 rows x 20 cols
 
 df_nulls = pd.DataFrame({'col': data.columns,
@@ -50,16 +47,34 @@ df_attr = pd.DataFrame({'Variable': data.columns,
                         'Unique values': [len(data[x].unique()) for x in data.columns]
 })
 
-# print(df_cols)
+print(df_cols)
+print(df_attr)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 '''
 Paremeters test #1: music_expl_method, music_recc_rating, fav_music_genre, spotify_subscription_plan
-
-1. EDA on those categories
-2. Clustering model + check accuracty
-3. Restart process with next group of params.
+------------------------------------
+1. LabelEncoder() since all are categorical
+2. sns.heatmap
+3. take most significant and perform classification model
+4. check the feature selection
+5. finalize classification
 '''
 
-param_1 = ['music_expl_method', 'music_recc_rating', 'fav_music_genre', 'spotify_subscription_plan']
-data_v1 = data.loc[:,['music_expl_method', 'music_recc_rating', 'fav_music_genre', 'spotify_subscription_plan']]
-
+# param_1 = ['music_expl_method', 'music_recc_rating', 'fav_music_genre', 'spotify_subscription_plan']
+# data_v1 = data.loc[:,['music_expl_method', 'music_recc_rating', 'fav_music_genre', 'spotify_subscription_plan']]
 
