@@ -19,10 +19,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 # pre-processing
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, MultiLabelBinarizer
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 
+from sklearn import set_config
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
 
@@ -154,40 +155,34 @@ sns.histplot(data['music_recc_rating'], binwidth=2.5)
 #=================================PRE-PROCESSING======================================
 '''
 Pre-processing:
-1. 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining)
+1. 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining) ==> MLB
 2. 'Age' ==> OrdinalEncoder(categories = [ages])
 3. 'Gender' ==> LabelEncoder ==> One Hot
 4. 'spotify_usage_period' ==> Ordinal Encoder, categories = [[usage_period]]
-5. 'Device' ==> OneHot w/ Smartphone, Computer or laptop, Smart speakers or voice assistants, Wearable devices
+5. 'Device' ==> OneHot w/ Smartphone, Computer or laptop, Smart speakers or voice assistants, Wearable devices ==> MLB
 6. 'spotify_subscription_plan'  ==> Label Encoder ==> One Hot
 7. 'fav_music_genre' ==> One Hot Encoding w/ 8 genres
 8. 'music_time_slot' ==> Ordinal Encoder w/ categories = [time_of_day]
-9. 'Mood' ==> One Hot Encoding
-10. 'Reason' ==> One-Hot (Note: drop '' when pre-processing)
+9. 'Mood' ==> One Hot Encoding ==> MLB
+10. 'Reason' ==> One-Hot (Note: drop '' when pre-processing) ==> MLB
 11. 'music_recc_rating' ==> STANDARDIZE.
 '''
-hot_col = ['Discovery Method', 'Gender', 'Device', 'spotify_subscription_plan', 'fav_music_genre', 'Mood', 'Reason']
-# ord_col = ['Age', 'spotify_usage_period', 'music_time_slot']
-num_col = ['music_recc_rating']
-# num_pipe = Pipeline(
-#     steps = [
-#         ('scaler', StandardScaler())
-#     ]
-# )
+hot_col = ['Gender', 'spotify_subscription_plan', 'fav_music_genre']
+mlb_col = ['Discovery Method', 'Device', 'Mood', 'Reason']
 
 hot_pipe = Pipeline(
     steps = [
-        ('ohe', OneHotEncoder(handle_unknown = 'error', sparse_output = False))
+        ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
     ]
 )
 
 pre_processor = ColumnTransformer(
     transformers = [
         ('one hot', hot_pipe, hot_col),
-        ('ordinal', OrdinalEncoder(categories=[ages]), ['Age']),
-        ('ordinal', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
-        ('ordinal', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot']),
-        ('numerical', StandardScaler(), num_col)
+        # ('mlb', MultiLabelBinarizer(), mlb_col),
+        ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
+        ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
+        ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
     ],
     remainder='drop',
     n_jobs=-1
@@ -200,7 +195,6 @@ classifier = Pipeline(
     ]
 )
 # Display Pipeline:
-# from sklearn import set_config
 # set_config(display="diagram")
 # print(classifier)
 
@@ -209,7 +203,7 @@ y = data['music_recc_rating']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
 
 classifier.fit(X_train, y_train)
-print("Predictions:", classifier.predict(X_test))
+# print("Predictions:", classifier.predict(X_test))
 
-# Evaluate pipeline performance
+# # Evaluate pipeline performance
 print("Performance score:", classifier.score(X_test, y_test))
