@@ -2,8 +2,13 @@
 Classification/Segmentation Model #1:
 Scikit Logistic Regression w/ NEW data
 
-Classification of spotify users and what is the best way to introduce music to each group?
-Clustering groups of users, then classify new users to each and test.
+Approach 1:
+Clustering spotify users and determinging each group's defining characteristics?
+Classification by music recc rating for each group and determine how to better promote?
+
+Aproach #2:
+Classification of spotify users by how much they enjoy Spotify's music recs.
+Determine how much a user may enjoy their recs, and how to create better recs for users with less than 3/5 rec ratings.
 """
 
 # load data
@@ -14,14 +19,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 # pre-processing
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
+
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 #============================== EDA for new data ==============================
 
@@ -47,8 +54,7 @@ df_attr = pd.DataFrame({'Variable': data.columns,
                         'Unique values': [len(data[x].unique()) for x in data.columns]
 })
 
-# Exploring parameters with many unique parameters
-
+# Explore and clean/engineer each column:
 # 1. 'music_expl_method' ==> into a list of multiple discovery methods
 discover = data['music_expl_method'].str.split(r'[,\s]+')
 data = data.drop('music_expl_method', axis=1)
@@ -139,31 +145,71 @@ plt.figure(6,(11,8))
 plt.xticks(rotation=45)
 plt.xlabel('Reasons & Mood for listening', fontsize=9)
 plt.bar(unique_reason_2.index, unique_reason_2.values)
+# plt.show()
 
 # 11. music_recc_rating ==> No change.
-# sns.displot(data['music_recc_rating'], kde = True)
+sns.histplot(data['music_recc_rating'], binwidth=2.5)
 # plt.show()
 
 #=================================PRE-PROCESSING======================================
 '''
 Pre-processing:
-LabelEncoder() for non-ordinal items
-1. 'music_recc_rating' ==> 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining)
+1. 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining)
 2. 'Age' ==> OrdinalEncoder(categories = [ages])
-3. 
+3. 'Gender' ==> LabelEncoder ==> One Hot
+4. 'spotify_usage_period' ==> Ordinal Encoder, categories = [[usage_period]]
+5. 'Device' ==> OneHot w/ Smartphone, Computer or laptop, Smart speakers or voice assistants, Wearable devices
+6. 'spotify_subscription_plan'  ==> Label Encoder ==> One Hot
+7. 'fav_music_genre' ==> One Hot Encoding w/ 8 genres
+8. 'music_time_slot' ==> Ordinal Encoder w/ categories = [time_of_day]
+9. 'Mood' ==> One Hot Encoding
+10. 'Reason' ==> One-Hot (Note: drop '' when pre-processing)
+11. 'music_recc_rating' ==> STANDARDIZE.
 '''
-df_cols_v2 = pd.DataFrame({'col': data.columns,
-                        'dtype': data.dtypes.values,
-                        }) 
-print(df_cols_v2)
+hot_col = ['Discovery Method', 'Gender', 'Device', 'spotify_subscription_plan', 'fav_music_genre', 'Mood', 'Reason']
+# ord_col = ['Age', 'spotify_usage_period', 'music_time_slot']
+num_col = ['music_recc_rating']
+# num_pipe = Pipeline(
+#     steps = [
+#         ('scaler', StandardScaler())
+#     ]
+# )
 
+hot_pipe = Pipeline(
+    steps = [
+        ('ohe', OneHotEncoder(handle_unknown = 'error', sparse_output = False))
+    ]
+)
 
-'''
-Paremeters test #1: music_expl_method, music_recc_rating, fav_music_genre, spotify_subscription_plan
-------------------------------------
-1. LabelEncoder() since all are categorical
-2. sns.heatmap
-3. take most significant and perform classification model
-4. check the feature selection
-5. finalize classification
-'''
+pre_processor = ColumnTransformer(
+    transformers = [
+        ('one hot', hot_pipe, hot_col),
+        ('ordinal', OrdinalEncoder(categories=[ages]), ['Age']),
+        ('ordinal', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
+        ('ordinal', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot']),
+        ('numerical', StandardScaler(), num_col)
+    ],
+    remainder='drop',
+    n_jobs=-1
+)
+
+classifier = Pipeline(
+    steps = [
+        ('preprocesser', pre_processor),
+        ('classifier', RandomForestClassifier())
+    ]
+)
+# Display Pipeline:
+# from sklearn import set_config
+# set_config(display="diagram")
+# print(classifier)
+
+X = data.drop('music_recc_rating', axis = 1)
+y = data['music_recc_rating']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+
+classifier.fit(X_train, y_train)
+print("Predictions:", classifier.predict(X_test))
+
+# Evaluate pipeline performance
+print("Performance score:", classifier.score(X_test, y_test))
