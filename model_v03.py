@@ -1,16 +1,3 @@
-"""
-Classification/Segmentation Model #1:
-Scikit Logistic Regression w/ NEW data
-
-Approach 1:
-Clustering spotify users and determinging each group's defining characteristics?
-Classification by music recc rating for each group and determine how to better promote?
-
-Aproach #2:
-Classification of spotify users by how much they enjoy Spotify's music recs.
-Determine how much a user may enjoy their recs, and how to create better recs for users with less than 3/5 rec ratings.
-"""
-
 # load data
 import pandas as pd
 import numpy as np
@@ -57,7 +44,7 @@ df_attr = pd.DataFrame({'Variable': data.columns,
 
 # Explore and clean/engineer each column:
 # 1. 'music_expl_method' ==> into a list of multiple discovery methods
-discover = data['music_expl_method'].str.split(r'[,\s]+')
+discover = data['music_expl_method'].str.split(r',[,\s]*')
 data = data.drop('music_expl_method', axis=1)
 data['Discovery Method'] = discover
 # Visualization:
@@ -81,7 +68,7 @@ sns.displot(data['Age'])
 # 3. 'Gender' ==> LabelEncoder
 sns.displot(data['Gender'])
 # print(sum(data['Gender']=='Others')) = 15/507 ~ 3% ==> Drop 'Others' gender
-data = data.drop(data[data['Gender']=='Others'].index, axis = 0)
+data = data.drop(data[data['Gender']=='Others'].index, axis = 0).reset_index(drop=True)
 
 # 4. spotify_usage_period ==> Ordinal Encoder
 usage_period = ['Less than 6 months', '6 months to 1 year', '1 year to 2 years', 'More than 2 years']
@@ -107,7 +94,7 @@ plt.bar(unique_devices.index, unique_devices.values)
 data['spotify_subscription_plan'] = data['spotify_subscription_plan'].apply(lambda x: 'Free' if x == "Free (ad-supported)" else 'Premium')
 
 # 7. fav_music_genre ==> Drop insignificant values - Classical & melody, dance, Old songs, trending songs random (4 rows total)
-data = data.drop(data[data['fav_music_genre'].isin(['Classical & melody, dance', 'Old songs', 'trending songs random'])].index, axis=0)
+data = data.drop(data[data['fav_music_genre'].isin(['Classical & melody, dance', 'Old songs', 'trending songs random'])].index, axis=0).reset_index(drop=True)
 # print(data['fav_music_genre'].value_counts()) ==> 8 genres; One Hot?
 
 # 8. music_time_slot ==> ordinal
@@ -153,6 +140,7 @@ sns.histplot(data['music_recc_rating'], binwidth=2.5)
 # plt.show()
 
 #=================================PRE-PROCESSING======================================
+# Everything above is identical to model_v02.py
 '''
 Pre-processing:
 1. 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining) ==> MLB
@@ -170,40 +158,63 @@ Pre-processing:
 hot_col = ['Gender', 'spotify_subscription_plan', 'fav_music_genre']
 mlb_col = ['Discovery Method', 'Device', 'Mood', 'Reason']
 
-hot_pipe = Pipeline(
-    steps = [
-        ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
-    ]
-)
+# Encode each multilabel binarizer in 'mlb_col'
+def encode_mlb(col):
+    # Encode
+    data_copy = data.copy()
+    mlb = MultiLabelBinarizer()
+    encoded = mlb.fit_transform(data_copy[col])
+    # Get distinct variables for 'col'
+    objs = mlb.classes_
+    # Ammend global 'data' 
+    data_copy = data_copy.drop(col, axis=1)
+    encoded_df = pd.DataFrame(encoded, columns=objs)
+    data_copy = pd.concat([data_copy, encoded_df], axis=1)
+    return data_copy
 
-pre_processor = ColumnTransformer(
-    transformers = [
-        ('one hot', hot_pipe, hot_col),
-        # ('mlb', MultiLabelBinarizer(), mlb_col),
-        ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
-        ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
-        ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
-    ],
-    remainder='drop',
-    n_jobs=-1
-)
+# Amend global 'data' for all columns to be encoded with MultiLabelBinarizer()
+for i in mlb_col:
+    data = encode_mlb(i)
 
-classifier = Pipeline(
-    steps = [
-        ('preprocesser', pre_processor),
-        ('classifier', RandomForestClassifier())
-    ]
-)
-# Display Pipeline:
-# set_config(display="diagram")
-# print(classifier)
+df_cols_2 = pd.DataFrame({'col': data.columns,
+                        'dtype': data.dtypes.values, #.values will match the col name to the dtypes and concat.
+                        }) 
+# print(df_cols_2) ==> Keep attributes of interest only
 
-X = data.drop('music_recc_rating', axis = 1)
-y = data['music_recc_rating']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+# hot_pipe = Pipeline(
+#     steps = [
+#         ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
+#     ]
+# )
 
-classifier.fit(X_train, y_train)
+# pre_processor = ColumnTransformer(
+#     transformers = [
+#         ('one hot', hot_pipe, hot_col),
+#         # ('mlb', MultiLabelBinarizer(), mlb_col),
+#         ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
+#         ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
+#         ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
+#     ],
+#     remainder='drop',
+#     n_jobs=-1
+# )
 
-# Evaluate pipeline performance
-print("Random Forest Classifier (without Multilabel Binarizer):")
-print("Performance score:", classifier.score(X_test, y_test))
+# classifier = Pipeline(
+#     steps = [
+#         ('preprocesser', pre_processor),
+#         ('classifier', RandomForestClassifier())
+#     ]
+# )
+# # Display Pipeline:
+# # set_config(display="diagram")
+# # print(classifier)
+
+# X = data.drop('music_recc_rating', axis = 1)
+# y = data['music_recc_rating']
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+
+# classifier.fit(X_train, y_train)
+
+# # Evaluate pipeline performance
+# print("Random Forest Classifier (without Multilabel Binarizer):")
+# print("Performance score:", classifier.score(X_test, y_test))
