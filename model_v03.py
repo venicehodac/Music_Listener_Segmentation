@@ -1,3 +1,10 @@
+'''
+Continuation of model_v02.py:
+- Random Forest Classfier w/ 5 classes
+- Added parameter processing
+- Extended hyperparameter tuning
+'''
+
 # load data
 import pandas as pd
 import numpy as np
@@ -17,6 +24,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
 
 #============================== EDA for new data ==============================
 
@@ -59,7 +68,7 @@ for row in discover:
 unique_methods = pd.Series(unique_methods)
 plt.figure(1, (10,5))
 plt.bar(unique_methods.index, unique_methods.values)
-# ==> Keep Playlist, recommendations, Radio, Others; drop ['Social', 'media', 'Friends', 'Search'] in Pre-processing
+# ==> Keep Playlist, recommendations, Radio, Others; drop ['Social media', 'Friends', 'Search', ''] in Pre-processing
 
 # 2. 'Age' ==> Ordinal Encoder
 ages = ['6-12', '12-20', '20-35', '35-60', '60+']
@@ -100,7 +109,7 @@ data = data.drop(data[data['fav_music_genre'].isin(['Classical & melody, dance',
 # 8. music_time_slot ==> ordinal
 time_of_day = ['Morning', 'Afternoon', 'Night']
 
-# 9. music_Influencial_mood: One Hot w/ music_Influencial_mood, Relaxation and stress relief, Uplifting and motivational, Sadness or melancholy, Social gatherings or parties
+# 9. music_Influencial_mood: One Hot w/ music_Influencial_mood: Relaxation and stress relief, Uplifting and motivational, Sadness or melancholy, Social gatherings or parties
 mood = data['music_Influencial_mood'].str.split(', ')
 data = data.drop('music_Influencial_mood', axis=1)
 data['Mood'] = mood
@@ -117,7 +126,7 @@ plt.figure(5,(11,5))
 plt.bar(unique_reason.index, unique_reason.values)
 
 # 10. music_lis_frequency ==> One-Hot (Note: drop '' when pre-processing)
-reason = data['music_lis_frequency'].str.split(r',[\s]*')
+reason = data['music_lis_frequency'].str.split(r',[,\s]*')
 data = data.drop('music_lis_frequency', axis=1)
 data['Reason'] = reason
 # Visual:
@@ -176,45 +185,76 @@ def encode_mlb(col):
 for i in mlb_col:
     data = encode_mlb(i)
 
+# ==> Keep attributes of interest only
+data = data.drop(['', 'Friends', 'Search', 'Social media', 'Social gatherings ', 'Night time', 'when cooking', 'Random ', 'Before bed '], axis=1)
 df_cols_2 = pd.DataFrame({'col': data.columns,
                         'dtype': data.dtypes.values, #.values will match the col name to the dtypes and concat.
                         }) 
-# print(df_cols_2) ==> Keep attributes of interest only
 
-# hot_pipe = Pipeline(
-#     steps = [
-#         ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
-#     ]
-# )
+hot_pipe = Pipeline(
+    steps = [
+        ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
+    ]
+)
 
-# pre_processor = ColumnTransformer(
-#     transformers = [
-#         ('one hot', hot_pipe, hot_col),
-#         # ('mlb', MultiLabelBinarizer(), mlb_col),
-#         ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
-#         ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
-#         ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
-#     ],
-#     remainder='drop',
-#     n_jobs=-1
-# )
+pre_processor = ColumnTransformer(
+    transformers = [
+        ('one hot', hot_pipe, hot_col),
+        ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
+        ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
+        ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
+    ],
+    remainder='passthrough',
+    n_jobs=-1
+)
 
-# classifier = Pipeline(
-#     steps = [
-#         ('preprocesser', pre_processor),
-#         ('classifier', RandomForestClassifier())
-#     ]
-# )
-# # Display Pipeline:
-# # set_config(display="diagram")
-# # print(classifier)
+classifier_v1 = Pipeline(
+    steps = [
+        ('preprocesser', pre_processor),
+        ('classifier', RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42))
+    ]
+)
+# Display Pipeline:
+# set_config(display="diagram")
+# print(classifier)
 
-# X = data.drop('music_recc_rating', axis = 1)
-# y = data['music_recc_rating']
-# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+X = data.drop('music_recc_rating', axis = 1)
+y = data['music_recc_rating']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
 
-# classifier.fit(X_train, y_train)
+classifier_v1.fit(X_train, y_train)
 
-# # Evaluate pipeline performance
-# print("Random Forest Classifier (without Multilabel Binarizer):")
-# print("Performance score:", classifier.score(X_test, y_test))
+# Evaluate pipeline performance
+print("Random Forest Classifier (with Multilabel Binarizer):")
+print("Performance score:", classifier_v1.score(X_test, y_test))
+
+# Set up a grid of values to search
+param_grid = {
+    'n_estimators': [10, 20, 100, 200],
+    'max_depth': [5, 10, 15]
+}
+# Print best combination
+pre_processor.fit(X_train)
+X_train_2 = pre_processor.transform(X_train)
+X_test_2 = pre_processor.transform(X_test)
+gridsearch = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=3, scoring='accuracy')
+gridsearch.fit(X_train_2, y_train)
+print("Best parameters:", gridsearch.best_params_)
+print("Best CV score:", gridsearch.best_score_)
+
+best_classifier = gridsearch.best_estimator_
+y_pred = best_classifier.predict(X_test_2)
+
+feature_importance = best_classifier.feature_importances_
+feature_name = X.columns
+sorted_indices = np.argsort(feature_importance)[::-1]
+print(type(X_train_2))
+# plt.figure(7,(10,5))
+# plt.bar(range(len(feature_importance)), feature_importance[sorted_indices], align='center')
+# plt.xticks(range(len(feature_importance)), np.array(feature_name)[sorted_indices], rotation=90)
+# plt.xlabel("Feature importance")
+# plt.title('Random Forest Feature Importance for Spotify Recc Rating')
+# plt.show()
+
+# # Use the best model found
+# decision_tree = classifier_v2.best_estimator_
