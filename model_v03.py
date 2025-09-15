@@ -228,33 +228,37 @@ classifier_v1.fit(X_train, y_train)
 print("Random Forest Classifier (with Multilabel Binarizer):")
 print("Performance score:", classifier_v1.score(X_test, y_test))
 
-# Set up a grid of values to search
+# ============================== GridSearchCV ==============================
 param_grid = {
     'n_estimators': [10, 20, 100, 200],
     'max_depth': [5, 10, 15]
 }
-# Print best combination
-pre_processor.fit(X_train)
-X_train_2 = pre_processor.transform(X_train)
-X_test_2 = pre_processor.transform(X_test)
+
+X_encoded = pre_processor.fit_transform(X)
+X_train_2, X_test_2, y_train_2, y_test_2 = train_test_split(X_encoded, y, test_size=0.5)
+# X_train_2 = pre_processor.transform(X_train)
+# X_test_2 = pre_processor.transform(X_test)
+
 gridsearch = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=3, scoring='accuracy')
-gridsearch.fit(X_train_2, y_train)
+gridsearch.fit(X_train_2, y_train_2)
+# Print best combination:
 print("Best parameters:", gridsearch.best_params_)
 print("Best CV score:", gridsearch.best_score_)
 
 best_classifier = gridsearch.best_estimator_
 y_pred = best_classifier.predict(X_test_2)
 
+# Feature importance shows noisy data with high dimensionality ==> Revisit preprocessing stage.
 feature_importance = best_classifier.feature_importances_
-feature_name = X.columns
+feature_name = pre_processor.get_feature_names_out()
 sorted_indices = np.argsort(feature_importance)[::-1]
-print(type(X_train_2))
-# plt.figure(7,(10,5))
-# plt.bar(range(len(feature_importance)), feature_importance[sorted_indices], align='center')
-# plt.xticks(range(len(feature_importance)), np.array(feature_name)[sorted_indices], rotation=90)
-# plt.xlabel("Feature importance")
-# plt.title('Random Forest Feature Importance for Spotify Recc Rating')
-# plt.show()
+
+plt.figure(7,(10,5))
+plt.bar(range(len(feature_importance)), feature_importance[sorted_indices], align='center')
+plt.xticks(range(len(feature_importance)), np.array(feature_name)[sorted_indices], rotation=90)
+plt.xlabel("Feature importance")
+plt.title('Random Forest Feature Importance for Spotify Recc Rating')
+plt.show()
 
 # # Use the best model found
 # decision_tree = classifier_v2.best_estimator_
