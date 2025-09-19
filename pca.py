@@ -1,0 +1,244 @@
+'''
+Problems to tackle:
+- Noisy data or pre-processing errors causing model's low performance
+
+Trial #1: PCA analysis 
+to cut down variables while retaining maximum variance in original dataset
+==> Lots of evenly spread variance amongst one-hot encoded categories
+'''
+
+# load data
+import pandas as pd
+import numpy as np
+# eda
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+# pre-processing
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, OrdinalEncoder, MultiLabelBinarizer
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split
+
+from sklearn import set_config
+from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
+
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.linear_model import LogisticRegression
+# from sklearn.ensemble import RandomForestClassifier
+# from sklearn.model_selection import GridSearchCV
+# from sklearn.metrics import accuracy_score
+
+# import xgboost as xgb
+# from xgboost import XGBClassifier
+
+from sklearn.decomposition import PCA
+from sklearn import preprocessing
+
+#============================== EDA for new data ==============================
+
+data = pd.read_excel("data/Spotify_data.xlsx")
+# 520 rows x 20 cols
+
+df_nulls = pd.DataFrame({'col': data.columns,
+                        'dtype': data.dtypes.values, #.values will match the col name to the dtypes and concat.
+                        'null': data.isnull().sum()
+                        }) 
+
+data = data.drop(['preffered_premium_plan', 'pod_lis_frequency', 'fav_pod_genre', 'preffered_pod_format', 'pod_host_preference', 
+                  'preffered_pod_duration', 'pod_variety_satisfaction', 'premium_sub_willingness', 'preferred_listening_content', ], axis=1)
+
+df_cols = pd.DataFrame({'col': data.columns,
+                        'dtype': data.dtypes.values, #.values will match the col name to the dtypes and concat.
+                        }) 
+
+# print(data.duplicated().sum()) ==> drop 13 duplicates
+data = data.drop_duplicates()
+
+df_attr = pd.DataFrame({'Variable': data.columns,
+                        'Unique values': [len(data[x].unique()) for x in data.columns]
+})
+
+# Explore and clean/engineer each column:
+# 1. 'music_expl_method' ==> into a list of multiple discovery methods
+discover = data['music_expl_method'].str.split(r',[,\s]*')
+data = data.drop('music_expl_method', axis=1)
+data['Discovery Method'] = discover
+# Visualization:
+unique_methods = {}
+for row in discover:
+    for m in row:
+        if m in unique_methods:
+            unique_methods[m] = unique_methods[m] + 1
+        else:
+            unique_methods[m] = 1
+
+unique_methods = pd.Series(unique_methods)
+plt.figure(1, (10,5))
+plt.bar(unique_methods.index, unique_methods.values)
+# ==> Keep Playlist, recommendations, Radio, Others; drop ['Social media', 'Friends', 'Search', ''] in Pre-processing
+
+# 2. 'Age' ==> Ordinal Encoder
+ages = ['6-12', '12-20', '20-35', '35-60', '60+']
+sns.displot(data['Age'])
+
+# 3. 'Gender' ==> LabelEncoder
+sns.displot(data['Gender'])
+# print(sum(data['Gender']=='Others')) = 15/507 ~ 3% ==> Drop 'Others' gender
+data = data.drop(data[data['Gender']=='Others'].index, axis = 0).reset_index(drop=True)
+
+# 4. spotify_usage_period ==> Ordinal Encoder
+usage_period = ['Less than 6 months', '6 months to 1 year', '1 year to 2 years', 'More than 2 years']
+
+# 5. spotify_listening_device ==> OneHot w/ Smartphone, Computer or laptop, Smart speakers or voice assistants, Wearable devices
+device = data['spotify_listening_device'].str.split(r',[\s]+')
+data = data.drop('spotify_listening_device', axis=1)
+data['Device'] = device
+# Visual:
+unique_devices = {}
+for row in data['Device']:
+    for d in row:
+        if d in unique_devices:
+            unique_devices[d] = unique_devices[d] + 1
+        else:
+            unique_devices[d] = 1
+
+unique_devices = pd.Series(unique_devices)
+plt.figure(4,(11,5))
+plt.bar(unique_devices.index, unique_devices.values)
+
+# 6. spotify_subscription_plan  ==> Label Encoder
+data['spotify_subscription_plan'] = data['spotify_subscription_plan'].apply(lambda x: 'Free' if x == "Free (ad-supported)" else 'Premium')
+
+# 7. fav_music_genre ==> Drop insignificant values - Classical & melody, dance, Old songs, trending songs random (4 rows total)
+data = data.drop(data[data['fav_music_genre'].isin(['Classical & melody, dance', 'Old songs', 'trending songs random'])].index, axis=0).reset_index(drop=True)
+# print(data['fav_music_genre'].value_counts()) ==> 8 genres; One Hot?
+
+# 8. music_time_slot ==> ordinal
+time_of_day = ['Morning', 'Afternoon', 'Night']
+
+# 9. music_Influencial_mood: One Hot w/ music_Influencial_mood: Relaxation and stress relief, Uplifting and motivational, Sadness or melancholy, Social gatherings or parties
+mood = data['music_Influencial_mood'].str.split(', ')
+data = data.drop('music_Influencial_mood', axis=1)
+data['Mood'] = mood
+#Visual:
+unique_reason = {}
+for row in data['Mood']:
+    for i in row:
+        if i in unique_reason:
+            unique_reason[i] = unique_reason[i] + 1
+        else:
+            unique_reason[i] = 1
+unique_reason = pd.Series(unique_reason)
+plt.figure(5,(11,5))
+plt.bar(unique_reason.index, unique_reason.values)
+
+# 10. music_lis_frequency ==> One-Hot (Note: drop '' when pre-processing)
+reason = data['music_lis_frequency'].str.split(r',[,\s]*')
+data = data.drop('music_lis_frequency', axis=1)
+data['Reason'] = reason
+# Visual:
+unique_reason_2 = {}
+for row in reason:
+    for i in row:
+        if i in unique_reason_2:
+            unique_reason_2[i] = unique_reason_2[i] + 1
+        else:
+            unique_reason_2[i] = 1
+unique_reason_2 = pd.Series(unique_reason_2)
+plt.figure(6,(11,8))
+plt.xticks(rotation=45)
+plt.xlabel('Reasons & Mood for listening', fontsize=9)
+plt.bar(unique_reason_2.index, unique_reason_2.values)
+# plt.show()
+
+# 11. music_recc_rating ==> No change.
+sns.histplot(data['music_recc_rating'], binwidth=2.5)
+# plt.show()
+
+#=================================PRE-PROCESSING======================================
+# Everything above is identical to model_v02.py
+'''
+Pre-processing:
+1. 'Discovery Method' - OneHotEncoder() w/ Playlist, recommendations, Radio, Others (drop remaining) ==> MLB
+2. 'Age' ==> OrdinalEncoder(categories = [ages])
+3. 'Gender' ==> LabelEncoder ==> One Hot
+4. 'spotify_usage_period' ==> Ordinal Encoder, categories = [[usage_period]]
+5. 'Device' ==> OneHot w/ Smartphone, Computer or laptop, Smart speakers or voice assistants, Wearable devices ==> MLB
+6. 'spotify_subscription_plan'  ==> Label Encoder ==> One Hot
+7. 'fav_music_genre' ==> One Hot Encoding w/ 8 genres
+8. 'music_time_slot' ==> Ordinal Encoder w/ categories = [time_of_day]
+9. 'Mood' ==> One Hot Encoding ==> MLB
+10. 'Reason' ==> One-Hot (Note: drop '' when pre-processing) ==> MLB
+11. 'music_recc_rating' ==> STANDARDIZE.
+'''
+hot_col = ['Gender', 'spotify_subscription_plan', 'fav_music_genre']
+mlb_col = ['Discovery Method', 'Device', 'Mood', 'Reason']
+
+# Encode each multilabel binarizer in 'mlb_col'
+def encode_mlb(col):
+    # Encode
+    data_copy = data.copy()
+    mlb = MultiLabelBinarizer()
+    encoded = mlb.fit_transform(data_copy[col])
+    # Get distinct variables for 'col'
+    objs = mlb.classes_
+    # Ammend global 'data' 
+    data_copy = data_copy.drop(col, axis=1)
+    encoded_df = pd.DataFrame(encoded, columns=objs)
+    data_copy = pd.concat([data_copy, encoded_df], axis=1)
+    return data_copy
+
+# Amend global 'data' for all columns to be encoded with MultiLabelBinarizer()
+for i in mlb_col:
+    data = encode_mlb(i)
+
+# ==> Keep attributes of interest only
+data = data.drop(['', 'Friends', 'Search', 'Social media', 'Social gatherings ', 'Night time', 'when cooking', 'Random ', 'Before bed '], axis=1)
+df_cols_2 = pd.DataFrame({'col': data.columns,
+                        'dtype': data.dtypes.values, #.values will match the col name to the dtypes and concat.
+                        }) 
+
+hot_pipe = Pipeline(
+    steps = [
+        ('ohe', OneHotEncoder(handle_unknown = 'ignore', sparse_output = False))
+    ]
+)
+
+pre_processor = ColumnTransformer(
+    transformers = [
+        ('one hot', hot_pipe, hot_col),
+        # ('scale', StandardScaler(), ['music_recc_rating']),
+        ('order age', OrdinalEncoder(categories=[ages]), ['Age']),
+        ('order usage', OrdinalEncoder(categories=[usage_period]), ['spotify_usage_period']),
+        ('order time', OrdinalEncoder(categories = [time_of_day]), ['music_time_slot'])
+    ],
+    remainder='passthrough',
+    n_jobs=-1
+)
+
+dep_data = data.drop('music_recc_rating', axis=1)
+# print('Dep data shape:', dep_data.columns)
+data_array_encoded = pre_processor.fit_transform(dep_data)
+# print(data_array_encoded.shape) # (488, 33)
+
+# =========================== PCA ===========================
+pca = PCA()
+data_t = data_array_encoded.T
+pca.fit(data_t) #scaled data
+pca_data = pca.transform(data_t) # generate coordinates for PCA graph
+
+# Visualize scree plot
+per_var = np.round(pca.explained_variance_ratio_ * 100, decimals=1) # % variance components have
+labels = ['PC' + str(x) for x in range(1, len(per_var)+1)]
+
+plt.figure(8,(11,5))
+plt.bar(x = range(1,len(per_var)+1), height = per_var, tick_label = labels)
+plt.ylabel('Percentage of Explained Variance')
+plt.xlabel('Principle Component')
+plt.title('Scree Plot')
+plt.show() # PC3 has more variation ==> use 4-D
+'''
+Before removing 'y' value of music recc rating: PC1, PC2, and PC3 held a large percentage of variance
+After removing 'y' value: PC1 and PC2 still had a high %
+'''
