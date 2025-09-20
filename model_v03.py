@@ -258,7 +258,7 @@ plt.bar(range(len(feature_importance)), feature_importance[sorted_indices], alig
 plt.xticks(range(len(feature_importance)), np.array(feature_name)[sorted_indices], rotation=90)
 plt.xlabel("Feature importance")
 plt.title('Random Forest Feature Importance for Spotify Recc Rating')
-plt.show()
+# plt.show()
 
 # # Use the best model found
-# decision_tree = classifier_v2.best_estimator_
+best_classifier.predict(X_test_2)

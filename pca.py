@@ -5,6 +5,7 @@ Problems to tackle:
 Trial #1: PCA analysis 
 to cut down variables while retaining maximum variance in original dataset
 ==> Lots of evenly spread variance amongst one-hot encoded categories
+==> However, PCA not suitable for data with non-linear relationships
 '''
 
 # load data

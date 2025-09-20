@@ -207,3 +207,4 @@ classifier.fit(X_train, y_train)
 # Evaluate pipeline performance
 print("Random Forest Classifier (without Multilabel Binarizer):")
 print("Performance score:", classifier.score(X_test, y_test))
+print("Checking alignment with test data:", classifier.score(X_train, y_train))
