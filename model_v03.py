@@ -142,10 +142,14 @@ plt.figure(6,(11,8))
 plt.xticks(rotation=45)
 plt.xlabel('Reasons & Mood for listening', fontsize=9)
 plt.bar(unique_reason_2.index, unique_reason_2.values)
-# plt.show()
+
 
 # 11. music_recc_rating ==> No change.
+plt.figure(7, (5,5))
 sns.histplot(data['music_recc_rating'], binwidth=2.5)
+
+plt.figure(8, (5,5))
+sns.histplot(data['music_recc_rating'], binwidth=1)
 # plt.show()
 
 #=================================PRE-PROCESSING======================================
@@ -253,12 +257,24 @@ feature_importance = best_classifier.feature_importances_
 feature_name = pre_processor.get_feature_names_out()
 sorted_indices = np.argsort(feature_importance)[::-1]
 
-plt.figure(7,(10,5))
+plt.figure(9,(10,5))
 plt.bar(range(len(feature_importance)), feature_importance[sorted_indices], align='center')
 plt.xticks(range(len(feature_importance)), np.array(feature_name)[sorted_indices], rotation=90)
 plt.xlabel("Feature importance")
 plt.title('Random Forest Feature Importance for Spotify Recc Rating')
 # plt.show()
 
-# # Use the best model found
-best_classifier.predict(X_test_2)
+# Use the best model found
+y_pred = best_classifier.predict(X_test_2)
+from sklearn.metrics import accuracy_score
+accuracy = accuracy_score(y_test_2, y_pred)
+print(f"Accuracy on test set with best estimator: {accuracy}")
+
+# Instead of 'accuracy' ==> try f1 score
+from sklearn.metrics import f1_score
+
+# Calculate F1 score = 0.25; POOR
+f1 = f1_score(y_test_2, y_pred, average='macro')
+print(f"F1 Score: {f1}")
+
+plt.show()
